@@ -25,6 +25,9 @@ jobs:
           git -C "$THEOS" checkout 5280bd038207e14f8bd76f5417aa2fe641c03228
           git -C "$THEOS" submodule update --init --recursive
 
+      - name: Install signing tool
+        run: brew install ldid
+
       - name: Build rootless package
         run: |
           xcrun --sdk iphoneos --show-sdk-version

@@ -3,6 +3,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface LYCMetalGlassView : UIView
+@property(nonatomic,readonly,getter=isRendererAvailable) BOOL rendererAvailable;
 - (void)refreshBackdrop;
 - (void)reloadParameters;
 @end

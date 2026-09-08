@@ -2,7 +2,7 @@ Package: com.qwer12345uui.liquidifycompanion
 Name: Liquidify Companion Glass
 Version: 1.0.0
 Architecture: iphoneos-arm64
-Description: Rootless companion configuration and independent Metal glass renderer. Requires a legitimately activated Liquidify installation; does not modify or bypass its authorization.
+Description: Independent rootless Metal liquid-glass renderer for the SpringBoard Dock. Does not modify Liquidify or bypass any authorization.
 Maintainer: qwer12345uui
 Author: qwer12345uui
 Section: Tweaks

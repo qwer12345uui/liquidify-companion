@@ -56,6 +56,8 @@ fragment half4 lycGlass(VOut in [[stage_in]], constant U &u [[buffer(0)]], textu
 @property(nonatomic,strong) id<MTLTexture> backdrop;
 @property(nonatomic,assign) LYCUniforms uniforms;
 @property(nonatomic,assign) BOOL capturing;
+@property(nonatomic,assign) BOOL captureScheduled;
+@property(nonatomic,assign) CGSize lastCaptureSize;
 @end
 
 @implementation LYCMetalGlassView
@@ -99,21 +101,55 @@ fragment half4 lycGlass(VOut in [[stage_in]], constant U &u [[buffer(0)]], textu
     _uniforms.blurRadius=MAX(0.0f,MIN(10.0f,[p objectForKey:@"BlurRadius"]?[p floatForKey:@"BlurRadius"]:2.0f));
     [_metalView setNeedsDisplay];
 }
-- (void)layoutSubviews { [super layoutSubviews]; self.layer.cornerRadius=MIN(32.0,CGRectGetHeight(self.bounds)*.28); [self refreshBackdrop]; }
-- (void)refreshBackdrop {
-    if (_capturing || !_pipeline || CGRectIsEmpty(self.bounds) || !self.window) return;
-    _capturing=YES; BOOL wasHidden=self.hidden; self.hidden=YES;
-    UIGraphicsBeginImageContextWithOptions(self.bounds.size,YES,UIScreen.mainScreen.scale);
-    CGContextRef c=UIGraphicsGetCurrentContext(); CGPoint o=[self convertPoint:CGPointZero toView:self.window];
-    CGContextTranslateCTM(c,-o.x,-o.y); [self.window.layer renderInContext:c];
-    UIImage *image=UIGraphicsGetImageFromCurrentImageContext(); UIGraphicsEndImageContext();
-    self.hidden=wasHidden;
-    if (image.CGImage) {
-        NSError *e=nil; MTKTextureLoader *loader=[[MTKTextureLoader alloc] initWithDevice:_metalView.device];
-        _backdrop=[loader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionSRGB:@NO,MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginTopLeft} error:&e];
-        if (e) NSLog(@"[LiquidifyCompanion] backdrop error: %@",e);
+- (BOOL)isRendererAvailable { return _pipeline != nil && _queue != nil && _metalView.device != nil; }
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    self.layer.cornerRadius=MIN(32.0,CGRectGetHeight(self.bounds)*.28);
+    CGFloat scale=MIN(UIScreen.mainScreen.scale,2.0);
+    _metalView.contentScaleFactor=scale;
+    _metalView.drawableSize=CGSizeMake(MAX(1.0,CGRectGetWidth(self.bounds)*scale),MAX(1.0,CGRectGetHeight(self.bounds)*scale));
+    if (!CGSizeEqualToSize(_lastCaptureSize,self.bounds.size)) {
+        _lastCaptureSize=self.bounds.size;
+        [self refreshBackdrop];
     }
-    _capturing=NO; [_metalView setNeedsDisplay];
+}
+- (void)refreshBackdrop {
+    NSAssert(NSThread.isMainThread,@"Backdrop capture must run on the main thread");
+    if (_captureScheduled || _capturing || !self.rendererAvailable || CGRectIsEmpty(self.bounds) || !self.window) return;
+    _captureScheduled=YES;
+    __weak typeof(self) weakSelf=self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        typeof(self) self=weakSelf;
+        if (!self) return;
+        self.captureScheduled=NO;
+        if (self.capturing || !self.rendererAvailable || !self.window || CGRectIsEmpty(self.bounds)) return;
+        self.capturing=YES;
+        BOOL wasHidden=self.hidden;
+        BOOL contextOpen=NO;
+        @try {
+            self.hidden=YES;
+            UIGraphicsBeginImageContextWithOptions(self.bounds.size,YES,MIN(UIScreen.mainScreen.scale,2.0));
+            contextOpen=YES;
+            CGContextRef c=UIGraphicsGetCurrentContext();
+            CGPoint o=[self convertPoint:CGPointZero toView:self.window];
+            CGContextTranslateCTM(c,-o.x,-o.y);
+            [self.window.layer renderInContext:c];
+            UIImage *image=UIGraphicsGetImageFromCurrentImageContext();
+            UIGraphicsEndImageContext();
+            contextOpen=NO;
+            if (image.CGImage) {
+                NSError *error=nil;
+                MTKTextureLoader *loader=[[MTKTextureLoader alloc] initWithDevice:self.metalView.device];
+                self.backdrop=[loader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionSRGB:@NO,MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginTopLeft} error:&error];
+                if (error) NSLog(@"[LiquidifyCompanion] backdrop error: %@",error);
+            }
+        } @finally {
+            if (contextOpen) UIGraphicsEndImageContext();
+            self.hidden=wasHidden;
+            self.capturing=NO;
+        }
+        [self.metalView setNeedsDisplay];
+    });
 }
 - (void)drawInMTKView:(MTKView *)view {
     if (!_backdrop || !_pipeline || !view.currentDrawable || !view.currentRenderPassDescriptor) return;
