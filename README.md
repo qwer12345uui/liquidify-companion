@@ -6,7 +6,7 @@
 
 1. **透明化**：仅在 `SBDockView` 内隐藏原生 Material/VisualEffect 背景，保留图标和交互。
 2. **独立 Metal 玻璃**：暂停式 `MTKView`，使用单次背景快照，实现折射、RGB 色散、近似模糊、Fresnel 边缘和定向眩光。
-3. **稳定性**：仅编译 arm64，避免本地旧 arm64e ABI 被优先选中；不 fishhook、不替换授权函数、不修改原包。
+3. **稳定性**：GitHub 使用 Xcode 原生编译 arm64 + arm64e；iSH 本地成品仅编译 arm64，避免旧 arm64e ABI 被优先选中；不 fishhook、不替换授权函数、不修改原包。
 
 ## 参数
 

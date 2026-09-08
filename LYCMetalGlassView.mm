@@ -117,38 +117,38 @@ fragment half4 lycGlass(VOut in [[stage_in]], constant U &u [[buffer(0)]], textu
     NSAssert(NSThread.isMainThread,@"Backdrop capture must run on the main thread");
     if (_captureScheduled || _capturing || !self.rendererAvailable || CGRectIsEmpty(self.bounds) || !self.window) return;
     _captureScheduled=YES;
-    __weak typeof(self) weakSelf=self;
+    __weak __typeof__(self) weakSelf=self;
     dispatch_async(dispatch_get_main_queue(), ^{
-        typeof(self) self=weakSelf;
-        if (!self) return;
-        self.captureScheduled=NO;
-        if (self.capturing || !self.rendererAvailable || !self.window || CGRectIsEmpty(self.bounds)) return;
-        self.capturing=YES;
-        BOOL wasHidden=self.hidden;
+        __typeof__(self) strongSelf=weakSelf;
+        if (!strongSelf) return;
+        strongSelf.captureScheduled=NO;
+        if (strongSelf.capturing || !strongSelf.rendererAvailable || !strongSelf.window || CGRectIsEmpty(strongSelf.bounds)) return;
+        strongSelf.capturing=YES;
+        BOOL wasHidden=strongSelf.hidden;
         BOOL contextOpen=NO;
         @try {
-            self.hidden=YES;
-            UIGraphicsBeginImageContextWithOptions(self.bounds.size,YES,MIN(UIScreen.mainScreen.scale,2.0));
+            strongSelf.hidden=YES;
+            UIGraphicsBeginImageContextWithOptions(strongSelf.bounds.size,YES,MIN(UIScreen.mainScreen.scale,2.0));
             contextOpen=YES;
             CGContextRef c=UIGraphicsGetCurrentContext();
-            CGPoint o=[self convertPoint:CGPointZero toView:self.window];
+            CGPoint o=[strongSelf convertPoint:CGPointZero toView:strongSelf.window];
             CGContextTranslateCTM(c,-o.x,-o.y);
-            [self.window.layer renderInContext:c];
+            [strongSelf.window.layer renderInContext:c];
             UIImage *image=UIGraphicsGetImageFromCurrentImageContext();
             UIGraphicsEndImageContext();
             contextOpen=NO;
             if (image.CGImage) {
                 NSError *error=nil;
-                MTKTextureLoader *loader=[[MTKTextureLoader alloc] initWithDevice:self.metalView.device];
-                self.backdrop=[loader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionSRGB:@NO,MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginTopLeft} error:&error];
+                MTKTextureLoader *loader=[[MTKTextureLoader alloc] initWithDevice:strongSelf.metalView.device];
+                strongSelf.backdrop=[loader newTextureWithCGImage:image.CGImage options:@{MTKTextureLoaderOptionSRGB:@NO,MTKTextureLoaderOptionOrigin:MTKTextureLoaderOriginTopLeft} error:&error];
                 if (error) NSLog(@"[LiquidifyCompanion] backdrop error: %@",error);
             }
         } @finally {
             if (contextOpen) UIGraphicsEndImageContext();
-            self.hidden=wasHidden;
-            self.capturing=NO;
+            strongSelf.hidden=wasHidden;
+            strongSelf.capturing=NO;
         }
-        [self.metalView setNeedsDisplay];
+        [strongSelf.metalView setNeedsDisplay];
     });
 }
 - (void)drawInMTKView:(MTKView *)view {
