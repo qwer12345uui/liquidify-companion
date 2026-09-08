@@ -124,16 +124,18 @@ fragment half4 lycGlass(VOut in [[stage_in]], constant U &u [[buffer(0)]], textu
         strongSelf.captureScheduled=NO;
         if (strongSelf.capturing || !strongSelf.rendererAvailable || !strongSelf.window || CGRectIsEmpty(strongSelf.bounds)) return;
         strongSelf.capturing=YES;
-        BOOL wasHidden=strongSelf.hidden;
+        UIView *captureContainer=strongSelf.superview ?: strongSelf;
+        UIWindow *window=strongSelf.window;
+        CGPoint origin=[strongSelf convertPoint:CGPointZero toView:window];
+        BOOL wasHidden=captureContainer.hidden;
         BOOL contextOpen=NO;
         @try {
-            strongSelf.hidden=YES;
+            captureContainer.hidden=YES;
             UIGraphicsBeginImageContextWithOptions(strongSelf.bounds.size,YES,MIN(UIScreen.mainScreen.scale,2.0));
             contextOpen=YES;
             CGContextRef c=UIGraphicsGetCurrentContext();
-            CGPoint o=[strongSelf convertPoint:CGPointZero toView:strongSelf.window];
-            CGContextTranslateCTM(c,-o.x,-o.y);
-            [strongSelf.window.layer renderInContext:c];
+            CGContextTranslateCTM(c,-origin.x,-origin.y);
+            [window.layer renderInContext:c];
             UIImage *image=UIGraphicsGetImageFromCurrentImageContext();
             UIGraphicsEndImageContext();
             contextOpen=NO;
@@ -145,7 +147,7 @@ fragment half4 lycGlass(VOut in [[stage_in]], constant U &u [[buffer(0)]], textu
             }
         } @finally {
             if (contextOpen) UIGraphicsEndImageContext();
-            strongSelf.hidden=wasHidden;
+            captureContainer.hidden=wasHidden;
             strongSelf.capturing=NO;
         }
         [strongSelf.metalView setNeedsDisplay];
