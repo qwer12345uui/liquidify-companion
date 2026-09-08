@@ -1,0 +1,10 @@
+Package: com.qwer12345uui.liquidifycompanion
+Name: Liquidify Companion Glass
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Rootless companion configuration and independent Metal glass renderer. Requires a legitimately activated Liquidify installation; does not modify or bypass its authorization.
+Maintainer: qwer12345uui
+Author: qwer12345uui
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000), firmware (>= 14.0), com.charlieleung.liquidify (>= 1.3.7-4)
+Conflicts: com.qwer12345uui.liquidifycompanion-old

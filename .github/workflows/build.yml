@@ -1,0 +1,43 @@
+name: Build rootless DEB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      THEOS: ${{ github.workspace }}/theos
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install pinned Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git "$THEOS"
+          git -C "$THEOS" checkout 5280bd038207e14f8bd76f5417aa2fe641c03228
+          git -C "$THEOS" submodule update --init --recursive
+
+      - name: Build rootless package
+        run: |
+          xcrun --sdk iphoneos --show-sdk-version
+          make clean package FINALPACKAGE=1 TARGET=iphone:clang:latest:14.0
+
+      - name: Inspect package
+        run: |
+          test -n "$(find packages -name '*.deb' -print -quit)"
+          find packages -name '*.deb' -maxdepth 1 -print -exec shasum -a 256 {} \;
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: LiquidifyCompanion-rootless
+          path: packages/*.deb
+          if-no-files-found: error
