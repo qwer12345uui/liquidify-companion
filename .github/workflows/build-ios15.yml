@@ -2,6 +2,11 @@ name: Build OpenMinis iOS 15 IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'iOS deployment target'
+        required: true
+        default: '15.0'
   push:
     branches: [main]
     paths:
@@ -16,6 +21,10 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 300
 
+    env:
+      # Bump this to 16.0/17.0 to skip the iOS 15 back-port work.
+      DEPLOY_TARGET: '${{ github.event.inputs.deploy_target || '16.0' }}'
+
     steps:
       - name: Checkout pipeline
         uses: actions/checkout@v4
@@ -24,7 +33,8 @@ jobs:
         run: |
           LOG="$GITHUB_WORKSPACE/build.log"
           {
-            echo "=== OpenMinis iOS 15 build, run $GITHUB_RUN_NUMBER ==="
+            echo "=== OpenMinis build, run $GITHUB_RUN_NUMBER ==="
+            echo "=== deployment target: $DEPLOY_TARGET ==="
             echo "=== runner ==="
             sw_vers
             echo "--- active Xcode ---"
@@ -44,10 +54,10 @@ jobs:
             https://github.com/OpenMinis/OpenMinis.git upstream >> "$LOG" 2>&1
           echo "deps/ish entries: $(ls upstream/deps/ish 2>/dev/null | wc -l)" >> "$LOG"
 
-          echo "=== STEP: apply iOS 15 patches ===" >> "$LOG"
+          echo "=== STEP: apply patches (target $DEPLOY_TARGET) ===" >> "$LOG"
           cp patches/ios15.sh upstream/ios15.sh
           cp patches/set_deployment.py upstream/set_deployment.py
-          ( cd upstream && bash ios15.sh ) >> "$LOG" 2>&1
+          ( cd upstream && bash ios15.sh "$DEPLOY_TARGET" ) >> "$LOG" 2>&1
 
           echo "=== STEP: install build tools ===" >> "$LOG"
           brew install ninja llvm libarchive pkg-config lld go >> "$LOG" 2>&1
@@ -103,9 +113,9 @@ jobs:
           if [ -d upstream/build/Minis.xcarchive ]; then
             mkdir -p ipa/Payload
             cp -R upstream/build/Minis.xcarchive/Products/Applications/*.app ipa/Payload/
-            ( cd ipa && zip -qry "$GITHUB_WORKSPACE/Minis-iOS15-unsigned.ipa" Payload )
+            ( cd ipa && zip -qry "$GITHUB_WORKSPACE/Minis-iOS.ipa" Payload )
             echo "IPA packaged:"
-            ls -lh "$GITHUB_WORKSPACE/Minis-iOS15-unsigned.ipa"
+            ls -lh "$GITHUB_WORKSPACE/Minis-iOS.ipa"
           else
             echo "no xcarchive produced - skipping IPA packaging"
           fi
@@ -114,17 +124,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Minis-iOS15-unsigned-ipa
-          path: Minis-iOS15-unsigned.ipa
+          name: Minis-iOS-unsigned-ipa
+          path: Minis-iOS.ipa
           if-no-files-found: ignore
 
       - name: Attach IPA to release
-        if: hashFiles('Minis-iOS15-unsigned.ipa') != ''
+        if: hashFiles('Minis-iOS.ipa') != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ios15-build-${{ github.run_number }}
-          name: OpenMinis iOS 15 build ${{ github.run_number }}
+          tag_name: ios-build-${{ github.run_number }}
+          name: OpenMinis iOS build ${{ github.run_number }}
           body: |
-            Unsigned IPA built with `IPHONEOS_DEPLOYMENT_TARGET = 15.0`.
+            Unsigned IPA built with `IPHONEOS_DEPLOYMENT_TARGET = ${{ github.event.inputs.deploy_target || '16.0' }}`.
             Installs on jailbroken devices; re-sign for stock devices.
-          files: Minis-iOS15-unsigned.ipa
+          files: Minis-iOS.ipa
