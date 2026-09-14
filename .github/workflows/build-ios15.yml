@@ -1,0 +1,113 @@
+name: Build OpenMinis iOS 15 IPA
+
+# Triggered when the pipeline itself changes, or manually.
+# The paths filter keeps this heavy macOS job from running on unrelated commits.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-ios15.yml'
+      - 'patches/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 300
+
+    steps:
+      - name: Checkout pipeline
+        uses: actions/checkout@v4
+
+      - name: Report toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Clone OpenMinis upstream with submodules
+        run: |
+          git clone --recurse-submodules --depth 1 \
+            https://github.com/OpenMinis/OpenMinis.git upstream
+          echo "deps/ish entries: $(ls upstream/deps/ish | wc -l)"
+          test -n "$(ls -A upstream/deps/ish)" || { echo "::error::deps/ish submodule empty"; exit 1; }
+
+      - name: Apply iOS 15 patches
+        run: |
+          cp patches/ios15.sh upstream/patches-ios15.sh
+          cd upstream
+          bash patches-ios15.sh
+
+      - name: Install build tools
+        run: |
+          brew install ninja llvm libarchive pkg-config || true
+          pip3 install --quiet meson || true
+
+      - name: Build native dependencies
+        run: |
+          cd upstream
+          chmod +x deps/*.sh
+          ./deps/build_lame.sh
+          ./deps/build_ffmpeg.sh
+          ./deps/build_ish.sh
+          ./deps/prepare_alpine_rootfs.sh
+
+      - name: Xcode archive (unsigned, iOS 15 target)
+        run: |
+          cd upstream
+          set -o pipefail
+          xcodebuild \
+            -project src/ios/Minis.xcodeproj \
+            -scheme Minis \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/Minis.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            archive 2>&1 | tee "$GITHUB_WORKSPACE/build.log"
+
+      - name: Publish build log to ci-logs branch
+        if: always()
+        run: |
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          if [ -f "$GITHUB_WORKSPACE/build.log" ]; then
+            cp "$GITHUB_WORKSPACE/build.log" ./build.log
+          else
+            echo "no build log produced" > ./build.log
+          fi
+          git add -f build.log
+          git commit -m "build log for run $GITHUB_RUN_NUMBER" || echo "nothing to commit"
+          git push -f origin "HEAD:ci-logs" || echo "log push failed"
+
+      - name: Package IPA
+        if: success()
+        run: |
+          cd upstream
+          mkdir -p build/ipa/Payload
+          cp -R build/Minis.xcarchive/Products/Applications/*.app build/ipa/Payload/
+          cd build/ipa
+          zip -qry "$GITHUB_WORKSPACE/Minis-iOS15-unsigned.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/Minis-iOS15-unsigned.ipa"
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Minis-iOS15-unsigned-ipa
+          path: Minis-iOS15-unsigned.ipa
+          if-no-files-found: error
+
+      - name: Attach IPA to release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios15-build-${{ github.run_number }}
+          name: OpenMinis iOS 15 build ${{ github.run_number }}
+          body: |
+            Unsigned IPA built with `IPHONEOS_DEPLOYMENT_TARGET = 15.0`.
+            Installs on jailbroken devices; re-sign for stock devices.
+          files: Minis-iOS15-unsigned.ipa
