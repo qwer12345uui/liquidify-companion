@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 300
 
     steps:
@@ -23,14 +23,18 @@ jobs:
       - name: Start build log
         run: |
           LOG="$GITHUB_WORKSPACE/build.log"
-          echo "=== OpenMinis iOS 15 build, run $GITHUB_RUN_NUMBER ===" > "$LOG"
-          echo "=== runner ===" >> "$LOG"
-          sw_vers >> "$LOG" 2>&1
-          xcodebuild -version >> "$LOG" 2>&1
-          xcrun --sdk iphoneos --show-sdk-version >> "$LOG" 2>&1
+          {
+            echo "=== OpenMinis iOS 15 build, run $GITHUB_RUN_NUMBER ==="
+            echo "=== runner ==="
+            sw_vers
+            echo "--- installed Xcodes ---"
+            ls /Applications | grep -i xcode || true
+            echo "--- active Xcode ---"
+            xcodebuild -version
+            echo "--- iOS SDK ---"
+            xcrun --sdk iphoneos --show-sdk-version
+          } > "$LOG" 2>&1
 
-      # Everything is captured into build.log so a failure anywhere is visible.
-      # continue-on-error lets the publish step run even when this dies.
       - name: Clone, patch, build deps, archive
         id: build
         continue-on-error: true
@@ -48,7 +52,7 @@ jobs:
 
           echo "=== STEP: install build tools ===" >> "$LOG"
           brew install ninja llvm libarchive pkg-config >> "$LOG" 2>&1
-          pip3 install --quiet meson >> "$LOG" 2>&1
+          pip3 install --quiet --break-system-packages meson >> "$LOG" 2>&1
 
           echo "=== STEP: build LAME ===" >> "$LOG"
           ( cd upstream && chmod +x deps/*.sh && ./deps/build_lame.sh ) >> "$LOG" 2>&1
@@ -103,7 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Minis-iOS15-unsigned-ipa
-          path: Monis-iOS15-unsigned.ipa
+          path: Minis-iOS15-unsigned.ipa
           if-no-files-found: ignore
 
       - name: Attach IPA to release
