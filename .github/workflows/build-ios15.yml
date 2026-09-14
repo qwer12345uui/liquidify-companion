@@ -27,8 +27,6 @@ jobs:
             echo "=== OpenMinis iOS 15 build, run $GITHUB_RUN_NUMBER ==="
             echo "=== runner ==="
             sw_vers
-            echo "--- installed Xcodes ---"
-            ls /Applications | grep -i xcode || true
             echo "--- active Xcode ---"
             xcodebuild -version
             echo "--- iOS SDK ---"
@@ -51,8 +49,13 @@ jobs:
           ( cd upstream && bash patches-ios15.sh ) >> "$LOG" 2>&1
 
           echo "=== STEP: install build tools ===" >> "$LOG"
-          brew install ninja llvm libarchive pkg-config >> "$LOG" 2>&1
+          brew install ninja llvm libarchive pkg-config lld >> "$LOG" 2>&1
           pip3 install --quiet --break-system-packages meson >> "$LOG" 2>&1
+
+          # iSH links its guest VDSO with -fuse-ld=lld; Homebrew LLVM no longer
+          # ships lld, so install it separately and expose ld.lld on PATH.
+          export PATH="$(brew --prefix lld)/bin:/opt/homebrew/opt/llvm/bin:$PATH"
+          echo "ld.lld at: $(which ld.lld)" >> "$LOG" 2>&1
 
           echo "=== STEP: build LAME ===" >> "$LOG"
           ( cd upstream && chmod +x deps/*.sh && ./deps/build_lame.sh ) >> "$LOG" 2>&1
