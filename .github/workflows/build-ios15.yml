@@ -45,8 +45,9 @@ jobs:
           echo "deps/ish entries: $(ls upstream/deps/ish 2>/dev/null | wc -l)" >> "$LOG"
 
           echo "=== STEP: apply iOS 15 patches ===" >> "$LOG"
-          cp patches/ios15.sh upstream/patches-ios15.sh
-          ( cd upstream && bash patches-ios15.sh ) >> "$LOG" 2>&1
+          cp patches/ios15.sh upstream/ios15.sh
+          cp patches/set_deployment.py upstream/set_deployment.py
+          ( cd upstream && bash ios15.sh ) >> "$LOG" 2>&1
 
           echo "=== STEP: install build tools ===" >> "$LOG"
           brew install ninja llvm libarchive pkg-config lld go >> "$LOG" 2>&1
